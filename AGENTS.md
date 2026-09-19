@@ -100,6 +100,27 @@ packet on rejection; preserve that path.
   blocks in the relevant `.cpp`. Don''t add a `static` at file
   scope in a header.
 
+## Toolchain compatibility (READ THIS BEFORE BUILDING)
+
+The prebuilt `external/UIPC64_SDK_C_version2/FSUIPCuser64.lib` was
+compiled with **MSVC v140** (Visual Studio 2015). Linking objects
+compiled with a different MSVC major version against this .lib
+produces `LNK1257 / C1047: The object or library file was created by
+a different version of the compiler`. Concretely:
+
+* Building with **v140** (or v141 / VS 2017) works for both Debug
+  and Release.
+* Building with **v142 / v143** (VS 2019 / 2022) compiles cleanly
+  but the link step against `FSUIPCuser64.lib` fails in Release.
+  Debug often links anyway because Debug objects don't carry the
+  `/GL` info that surfaces the mismatch.
+
+If you don't have v140 installed, the supported workaround is to
+obtain a v142-rebuilt `FSUIPCuser64.lib` from Pete Dowson (the
+FSUIPC SDK ships sources in some versions) and drop it into
+`external/UIPC64_SDK_C_version2/`. Otherwise install the Visual
+Studio 2015 Build Tools to get the v140 toolset.
+
 ## Build
 
 * The project is **x64 only**.
@@ -194,3 +215,4 @@ Before adding a new transport:
 * **Local-stall watchdog**. Same -- the reference had a
   `STALL_THRESHOLD_MS` block marked `DEBUG -- DELETE LATER`. We
   deleted it.
+
