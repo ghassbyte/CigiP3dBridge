@@ -154,6 +154,8 @@
     <ClInclude Include="src\BinPlayer.h" />
     <ClInclude Include="src\PcapCapture.h" />
     <ClInclude Include="src\RepositionController.h" />
+    <ClInclude Include="src\Gui.h" />
+    <ClInclude Include="src\GuiLog.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\CigiProcessor.cpp" />
@@ -161,6 +163,8 @@
     <ClCompile Include="src\BinPlayer.cpp" />
     <ClCompile Include="src\PcapCapture.cpp" />
     <ClCompile Include="src\RepositionController.cpp" />
+    <ClCompile Include="src\Gui.cpp" />
+    <ClCompile Include="src\GuiLog.cpp" />
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

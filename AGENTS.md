@@ -207,8 +207,10 @@ Before adding a new transport:
 
 ## Things deliberately NOT here
 
-* **GUI**. The brief said "later". `RepositionController` exposes
-  `request(...)` which is what a future button handler will call.
+* **GUI reposition / bin-replay controls**. The GUI (`src/Gui.h/.cpp`)
+  covers NIC selection + live-capture START/STOP only. Reposition and
+  bin replay remain CLI-driven; `RepositionController::request(...)` is
+  the seam a future GUI button handler would call.
 * **Source-port-lock warning**. The reference bridge had it; this
   one doesn''t. Re-add if you ever see two streams silently merging
   on a debug HOST.

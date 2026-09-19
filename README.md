@@ -72,11 +72,25 @@ Output goes to `x64\Release\CigiP3dBridge.exe` (Debug = `x64\Debug\`).
 ## Run
 
 ```
+CigiP3dBridge.exe                       (no args: launch the GUI)
+CigiP3dBridge.exe --gui
 CigiP3dBridge.exe --list-devices
 CigiP3dBridge.exe --live 0 --host-ip 192.168.70.2 --data-port 8000
 CigiP3dBridge.exe --bin E:\path\to\capture.bin
 CigiP3dBridge.exe --bin E:\path\to\capture.bin --reposition -6.125,106.655,0,90
 ```
+
+### GUI
+
+Running with no arguments (or `--gui`) opens a small window that lists
+every Npcap-capturable NIC, lets you pick one, and START/STOP a live
+capture on it (using the default `--host-ip 192.168.70.2 --data-port
+8000` filter). The window **cannot** be closed with its X button or
+Alt+F4 -- exit only via the EXIT button -- so the bridge isn't torn
+down by accident mid-capture.
+
+The CLI modes (`--bin`, `--live`, `--list-devices`) still work exactly
+as before for headless or scripted use.
 
 `--reposition` accepts `lat,lon,alt_m,yaw_deg[,pitch_deg,roll_deg]`.
 You can pass it multiple times; the last one wins. The teleport fires
@@ -109,6 +123,7 @@ The source is split into one `.cpp`/`.h` pair per subsystem under
 | `BinPlayer.h/.cpp`          | `.bin` replay                                     |
 | `PcapCapture.h/.cpp`        | Npcap live capture                                |
 | `RepositionController.h/.cpp` | One-shot teleport during replay                |
+| `Gui.h/.cpp`                 | Simple Win32 GUI: NIC picker + START/STOP/EXIT |
 | `main.cpp`                  | CLI, FSUIPC open/close, mode dispatch              |
 
 Each header has a comment at the top explaining what the file does and
@@ -177,9 +192,10 @@ bridge, so existing captures replay unchanged.
 
 ## Limitations / known gaps
 
-* **No GUI.** The brief asked for "a simple GUI later"; the seam is
-  `RepositionController::request(...)`, which is what a future
-  button handler will call. The CLI does everything today.
+* **No continuous GUI controls.** The GUI (`--gui` / no args) covers NIC
+  selection and live-capture START/STOP; reposition and bin replay are
+  still driven from the CLI. `RepositionController::request(...)` is the
+  seam a future button handler would call to add reposition to the GUI.
 * **Live mode doesn''t accept `--reposition`.** In live mode you''re
   already following the wire; overriding that would mean ignoring
   real CIGI traffic. If you want to jump while connected live, switch

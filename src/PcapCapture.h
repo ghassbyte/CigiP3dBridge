@@ -25,15 +25,34 @@
 // =====================================================================
 
 #include <string>
+#include <vector>
 
 namespace cigi { class RepositionController; }
 
 namespace pcapcap {
 
+// One Npcap-capturable device, as reported by pcap_findalldevs().
+struct DeviceInfo {
+    std::string name;         // "\\Device\\NPF_{...}" -- what run() wants
+    std::string description;  // human-friendly, may be empty
+};
+
 // Prints every Npcap-capable device as "[index] \\Device\\NPF_{...}
 //  - Friendly description" and returns. Use the index or full name as
 //  `device` in run().
 void listCaptureDevices();
+
+// Fills `out` with every Npcap-capable device (same enumeration as
+// listCaptureDevices, but returned instead of printed). Returns false
+// (leaving `out` empty) if pcap_findalldevs fails. Used by the GUI's
+// NIC picker so the GUI doesn't have to touch <pcap.h> itself.
+bool listDevices(std::vector<DeviceInfo>& out);
+
+// Asks the currently-running capture to stop at the next read timeout
+// (<= ~1s latency). Safe to call from any thread; no-op if nothing is
+// capturing. Used by the GUI's STOP/EXIT buttons so the message loop
+// isn't wedged by a forever-running pcap_loop().
+void requestStop();
 
 // Captures forever (or until pcap_loop returns, which today only
 // happens on a fatal error -- Ctrl-C is the normal exit). The given

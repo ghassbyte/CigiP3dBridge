@@ -27,10 +27,12 @@
 #include "PcapCapture.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <cstdio>
 #include <iostream>
 #include <string>
+#include <vector>
 
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -48,6 +50,10 @@ namespace {
 // the capture. Used by the in-callback IP-srcip sanity check.
 in_addr  g_liveHostFilterAddr{};
 uint16_t g_liveDataPort = 8000;
+
+// Set by requestStop() (the GUI's STOP/EXIT). The capture loop checks
+// this at least once per read timeout and returns when it's raised.
+std::atomic<bool> g_stopRequested{false};
 
 // Resolves a numeric index (as printed by listCaptureDevices) into
 // the actual "\\Device\\NPF_{GUID}" name pcap_open_live() needs.
@@ -137,6 +143,28 @@ void listCaptureDevices() {
     pcap_freealldevs(alldevs);
 }
 
+bool listDevices(std::vector<DeviceInfo>& out) {
+    out.clear();
+    char errbuf[PCAP_ERRBUF_SIZE] = {};
+    pcap_if_t* alldevs = nullptr;
+    if (pcap_findalldevs(&alldevs, errbuf) == -1) {
+        std::cerr << "pcap_findalldevs failed: " << errbuf << std::endl;
+        return false;
+    }
+    for (pcap_if_t* d = alldevs; d != nullptr; d = d->next) {
+        DeviceInfo info;
+        info.name        = d->name;
+        info.description = d->description ? d->description : "";
+        out.push_back(info);
+    }
+    pcap_freealldevs(alldevs);
+    return true;
+}
+
+void requestStop() {
+    g_stopRequested = true;
+}
+
 void run(const std::string& deviceArg,
          const std::string& hostIp,
          unsigned short    dataPort,
@@ -174,7 +202,16 @@ void run(const std::string& deviceArg,
     std::cout << "Tapping " << device << " for CIGI traffic from " << hostIp
               << " -> UDP " << dataPort << " (promiscuous capture)..." << std::endl;
 
-    pcap_loop(handle, /*cnt=*/0, livePacketHandler, nullptr); // 0 = capture forever
+    // Capture until requestStop() is called (or a fatal error). Using
+    // pcap_dispatch in a loop -- rather than a single pcap_loop(..., 0)
+    // -- lets us observe g_stopRequested between reads (at least once per
+    // 1000ms read timeout) so the GUI can tear the capture down cleanly.
+    g_stopRequested = false;
+    while (!g_stopRequested.load()) {
+        const int rc = pcap_dispatch(handle, /*maxPackets=*/1, livePacketHandler, nullptr);
+        if (rc < 0) break;      // fatal error
+        if (rc == 0) continue;  // read timeout, nothing captured this round
+    }
     pcap_close(handle);
 }
 
