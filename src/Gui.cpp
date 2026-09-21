@@ -18,6 +18,13 @@
 //  only path field, Refresh/START/STOP/EXIT buttons, "Live status" field
 //  (the self-overwriting per-frame line), scrolling log pane, status
 //  label. Sizes below are in 96-DPI design pixels and scaled by S().
+//
+//  The window is deliberately compact (640x494 client). The fonts are
+//  NOT shrunk to achieve that -- readability is preserved by reclaiming
+//  whitespace instead, so the operator keeps the 12pt/11pt text they had
+//  while the mostly-empty NIC list and log pane give back their slack.
+//  Every rect is derived from the k* layout constants below, so retuning
+//  the size is a single-point change.
 // =====================================================================
 
 #include "Gui.h"
@@ -61,6 +68,38 @@ constexpr unsigned short kDefaultPort = 8000;
 
 // Keep the scrolling log bounded.
 constexpr std::size_t kMaxLogLines = 2000;
+
+// ---------------------------------------------------------------------
+// Layout. All values are 96-DPI design pixels; every rect below is run
+// through S() so higher-DPI displays scale the whole window instead of
+// clipping it. The window is intentionally small -- re-run the smoke
+// build (see AGENTS.md) and eyeball the result after changing any of
+// these.
+// ---------------------------------------------------------------------
+constexpr int kMargin   = 12;   // outer padding on every side
+constexpr int kGap      = 4;    // vertical gap between consecutive rows
+constexpr int kContentW = 616;  // usable width inside the margins
+constexpr int kLabelH   = 18;   // plain static label
+constexpr int kFieldH   = 22;   // read-only edit field (and its row)
+constexpr int kLabelW   = 96;   // leading label on a label+field row --
+                                // sized for the widest one, "Selected NIC:",
+                                // so it isn't clipped (STATICs don't ellipsize)
+constexpr int kBtnW     = 88;
+constexpr int kBtnH     = 26;
+constexpr int kListH    = 150;  // NIC listbox, ~8 rows at 12pt
+constexpr int kLogH     = 190;  // scrolling log pane
+
+// Client size, computed from the row heights above so the two can't drift
+// apart. kClientH sums: margin, then each row plus its trailing gap, then
+// the closing margin.
+constexpr int kClientW = kContentW + 2 * kMargin;
+constexpr int kClientH = kMargin + kLabelH + kGap   // "Select NIC..." label
+                       + kListH  + kGap             // NIC listbox
+                       + kFieldH + kGap             // "Selected NIC" field
+                       + kBtnH   + kGap             // Refresh/START/STOP/EXIT
+                       + kFieldH + kGap             // "Live status" field
+                       + kLogH   + kGap             // scrolling log pane
+                       + kLabelH + kMargin;         // status label
 
 HWND      g_hwnd      = nullptr;
 HINSTANCE g_hInstance = nullptr;
@@ -211,64 +250,78 @@ void captureThreadFunc(std::string device) {
 void createControls(HWND hwnd) {
     HWND c;
 
+    // Left edge of the content column, and the indent/width of the read-only
+    // fields that sit next to their labels ("Selected NIC" / "Live status").
+    const int x      = kMargin;
+    const int fieldX = kMargin + kLabelW + kGap;
+    const int fieldW = kContentW - kLabelW - kGap;
+
+    int y = kMargin;
+
     c = CreateWindowA("STATIC", "Select network interface (NIC) for live capture:",
-                      WS_CHILD | WS_VISIBLE, S(16), S(14), S(860), S(20),
+                      WS_CHILD | WS_VISIBLE, S(x), S(y), S(kContentW), S(kLabelH),
                       hwnd, nullptr, g_hInstance, nullptr);
     setUiFont(c);
+    y += kLabelH + kGap;
 
     c = CreateWindowA("LISTBOX", nullptr,
                       WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_HSCROLL |
                           LBS_NOTIFY | WS_BORDER,
-                      S(16), S(38), S(860), S(250),
+                      S(x), S(y), S(kContentW), S(kListH),
                       hwnd, idm(kIdListNics), g_hInstance, nullptr);
     setUiFont(c);
+    y += kListH + kGap;
 
     c = CreateWindowA("STATIC", "Selected NIC:",
-                      WS_CHILD | WS_VISIBLE, S(16), S(298), S(94), S(22),
+                      WS_CHILD | WS_VISIBLE, S(x), S(y + 2), S(kLabelW), S(kLabelH),
                       hwnd, nullptr, g_hInstance, nullptr);
     setUiFont(c);
     c = CreateWindowA("EDIT", "",
                       WS_CHILD | WS_VISIBLE | WS_BORDER | ES_READONLY | ES_AUTOHSCROLL,
-                      S(112), S(296), S(764), S(24),
+                      S(fieldX), S(y), S(fieldW), S(kFieldH),
                       hwnd, idm(kIdSelected), g_hInstance, nullptr);
     setUiFont(c);
+    y += kFieldH + kGap;
 
     c = CreateWindowA("BUTTON", "Refresh", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                      S(16), S(332), S(100), S(30),
+                      S(x), S(y), S(kBtnW), S(kBtnH),
                       hwnd, idm(kIdBtnRefresh), g_hInstance, nullptr);
     setUiFont(c);
     c = CreateWindowA("BUTTON", "START", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                      S(124), S(332), S(100), S(30),
+                      S(x + kBtnW + kGap), S(y), S(kBtnW), S(kBtnH),
                       hwnd, idm(kIdBtnStart), g_hInstance, nullptr);
     setUiFont(c);
     c = CreateWindowA("BUTTON", "STOP", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                      S(232), S(332), S(100), S(30),
+                      S(x + 2 * (kBtnW + kGap)), S(y), S(kBtnW), S(kBtnH),
                       hwnd, idm(kIdBtnStop), g_hInstance, nullptr);
     setUiFont(c);
     c = CreateWindowA("BUTTON", "EXIT", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                      S(776), S(332), S(100), S(30),
+                      S(x + kContentW - kBtnW), S(y), S(kBtnW), S(kBtnH),
                       hwnd, idm(kIdBtnExit), g_hInstance, nullptr);
     setUiFont(c);
+    y += kBtnH + kGap;
 
     c = CreateWindowA("STATIC", "Live status:",
-                      WS_CHILD | WS_VISIBLE, S(16), S(376), S(94), S(22),
+                      WS_CHILD | WS_VISIBLE, S(x), S(y + 2), S(kLabelW), S(kLabelH),
                       hwnd, nullptr, g_hInstance, nullptr);
     setUiFont(c);
     c = CreateWindowA("EDIT", "",
                       WS_CHILD | WS_VISIBLE | WS_BORDER | ES_READONLY | ES_AUTOHSCROLL,
-                      S(112), S(374), S(764), S(24),
+                      S(fieldX), S(y), S(fieldW), S(kFieldH),
                       hwnd, idm(kIdLiveStatus), g_hInstance, nullptr);
     setUiFont(c);
+    y += kFieldH + kGap;
 
     c = CreateWindowA("EDIT", "",
                       WS_CHILD | WS_VISIBLE | WS_BORDER | WS_VSCROLL |
                           ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | ES_LEFT,
-                      S(16), S(406), S(860), S(232),
+                      S(x), S(y), S(kContentW), S(kLogH),
                       hwnd, idm(kIdLog), g_hInstance, nullptr);
     setLogFont(c);
+    y += kLogH + kGap;
 
     c = CreateWindowA("STATIC", "Status: idle", WS_CHILD | WS_VISIBLE,
-                      S(16), S(646), S(860), S(24),
+                      S(x), S(y), S(kContentW), S(kLabelH),
                       hwnd, idm(kIdStatusMsg), g_hInstance, nullptr);
     setUiFont(c);
 }
@@ -409,7 +462,7 @@ int run() {
     // WS_SYSMENU keeps the caption + X button (so the operator can see
     // they're not supposed to use it); WM_CLOSE/SC_CLOSE are ignored.
     const DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
-    RECT rc = { 0, 0, S(892), S(682) };
+    RECT rc = { 0, 0, S(kClientW), S(kClientH) };
     AdjustWindowRect(&rc, style, FALSE);
 
     HWND hwnd = CreateWindowA("CigiP3dBridgeGui", "CigiP3dBridge", style,
