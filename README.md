@@ -1,5 +1,12 @@
 ﻿# CigiP3dBridge
 
+> [!IMPORTANT]
+> **This repository is the initial work and is no longer used.**
+> It is kept as a reference only, and will not be maintained or developed
+> further. The latest work lives at
+> [ghassbyte/CigiP3dSimConnect](https://github.com/ghassbyte/CigiP3dSimConnect)
+> (private repository).
+
 A small Windows console app that decodes CIGI v3.x (Common Image Generator
 Interface) traffic sent from a HOST image generator to a master IG and
 writes the aircraft''s position / attitude / time-of-day into the local
@@ -161,14 +168,40 @@ collapses an out-of-range double).
 ## Cold-start handoff
 
 The very first `Entity 0` CIGI packet of any session triggers a
-one-time handoff:
+one-time handoff, which deliberately reproduces in code what the manual
+"disable slew, then re-enable it" workaround does. A plain
+slew-engage is not enough, for two reasons:
 
-1. Write the target LLAPBH and clear `0x0366` (on-ground) **together,
-   with slew still OFF**. FS''s normal reposition handling reconciles
-   "aircraft now 6000 nm from where it was, marked airborne".
-2. Turn slew on at `0x05DC`. From here on, the on-ground flag is
-   frozen at 0; subsequent entity packets go through the per-frame
-   `applyEntityToFs` path; the slew watchdog keeps it engaged.
+* `0x0366` (on-ground) is **not refreshed while in slew mode**, and
+  writes issued while in slew mode **are not reflected either** -- so
+  the flag cannot simply be cleared once slew is on.
+* Cleared while slew is OFF, the still-live ground model puts it
+  straight back to `1`, unless the sim first gets a moment to see the
+  aircraft sitting at the (airborne) commanded altitude.
+
+So the handoff walks a small state machine, one step per incoming
+`Entity 0` packet:
+
+1. **Start** -- force slew OFF (`0x05DC=0` **and** the companion
+   `0x05DE` control write), write the target LLAPBH, and clear
+   `0x0366`. Begin the settle window.
+2. **Settle** -- keep writing the pose with slew OFF until `0x0366`
+   reads `0` (the ground model has accepted "airborne") or the settle
+   window (`ON_GROUND_SETTLE_MS`) expires.
+3. **Engage** -- turn slew ON (`0x05DC=1` **and** `0x05DE`) and
+   **confirm it by reading `0x05DC` back**. On-ground is now frozen at
+   whatever the settle reached, so the aircraft is no longer clamped to
+   the ground. If `0x0366` is still `1` here, another settle pass is
+   run, bounded by `MAX_SETTLE_PASSES`.
+4. **Done** -- the per-frame `applyEntityToFs` path and the slew
+   watchdog take over.
+
+From there the per-frame path deliberately does **not** re-write
+`0x0366` (ineffective in slew mode, and the flag is already where the
+settle left it). A 1 Hz `[diag]` line logs the sim''s actual pose
+against the last commanded pose, so a "write fight" (oscillating around
+the command) can be told apart from live-mode lag (steadily stepping) or
+a render-only artifact (delta ~ 0).
 
 The same code path runs for a `--reposition` teleport (queued during
 bin replay).
